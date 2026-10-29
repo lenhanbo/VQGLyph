@@ -1,0 +1,49 @@
+seed: 42
+data:
+  # Attach a Kaggle Dataset containing a JSON/JSONL manifest and SD19 PNGs.
+  # Each row needs: path, character, writer_id; partition and sample_id are optional.
+  nist19_manifest: /kaggle/input/nist19-manifest/manifest.jsonl
+  # Alternative official second-edition trees; used when the manifest is absent.
+  nist19_by_write: /kaggle/input/nist-sd19/by_write
+  nist19_by_class: /kaggle/input/nist-sd19/by_class
+  nist19_prepared_dir: /kaggle/working/glyph-codebook-data/nist19
+  nist19_split: [0.8, 0.1, 0.1]
+  classifier_checkpoint: /kaggle/input/charwritevit-classifier/best.pt
+
+glyph_codebook:
+  image_size: 32
+  clusters: 4
+  references: 8
+  embedding_dim: 128
+  encoder_width: 64
+  hidden_dim: 128
+  attention_temperature: 0.1
+  value_mode: feature
+  kmeans_iterations: 50
+  extract_batch_size: 512
+  evaluate_batch_size: 128
+  num_workers: 2
+  encoder_train:
+    epochs: 20
+    batch_size: 128
+    num_workers: 2
+    learning_rate: 0.0003
+    weight_decay: 0.0001
+    temperature: 0.1
+    content_weight: 1.0
+    style_weight: 1.0
+    decorrelation_weight: 0.1
+    validation_batches: 50
+    amp: true
+  selector_train:
+    epochs: 30
+    oracle_warmup_epochs: 3
+    batch_size: 64
+    num_workers: 2
+    learning_rate: 0.0002
+    weight_decay: 0.0001
+    selection_weight: 1.0
+    pixel_weight: 10.0
+    edge_weight: 1.0
+    character_weight: 1.0
+    amp: true
