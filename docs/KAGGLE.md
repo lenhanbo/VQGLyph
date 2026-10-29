@@ -36,6 +36,23 @@ This first pass hashes every PNG in both trees and can take time. Persist the
 resulting prepared directory as a Kaggle Dataset so later runs can use its
 `manifest.json` directly.
 
+For a reusable Kaggle input, prepare it locally from the official archives.
+Extract `by_class` into the output directory, then run:
+
+```bash
+python -m glyph_codebook.cli.prepare \
+  --config configs/kaggle.yaml \
+  --by-write-archive /path/to/by_write.zip \
+  --by-class-archive /path/to/by_class.zip \
+  --by-class /path/to/nist19-prepared/by_class \
+  --output /path/to/nist19-prepared \
+  --portable
+```
+
+Upload only `nist19-prepared` (`by_class` plus the JSON files); `by_write` is
+not needed after writer IDs have been recorded. Set `data.nist19_prepared_dir`
+to the Kaggle input mount, for example `/kaggle/input/nist19-prepared`.
+
 Install and validate:
 
 ```bash

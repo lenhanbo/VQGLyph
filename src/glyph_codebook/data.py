@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import random
 import re
+import zipfile
 from collections import defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import torch
 from PIL import Image
@@ -22,6 +24,65 @@ def _digest(path: Path) -> tuple[int, bytes]:
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1 << 20), b""): digest.update(chunk)
     return path.stat().st_size, digest.digest()
+
+
+def _zip_digest(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> tuple[int, bytes]:
+    digest = hashlib.sha1()
+    with archive.open(info) as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return info.file_size, digest.digest()
+
+
+def build_manifest_from_sd19_archives(
+    by_write_archive: str | Path, by_class_archive: str | Path, extracted_by_class: str | Path
+) -> tuple[list[dict], dict[str, int]]:
+    """Cross-index SD19 inside ZIPs while pointing records at extracted class PNGs."""
+    origins: dict[tuple[int, bytes], list[tuple[str, str, str]]] = defaultdict(list)
+    writer_pattern = re.compile(r"^f(\d{4})_(\d{2})$")
+    partition_pattern = re.compile(r"^hsf_\d+$")
+    with zipfile.ZipFile(by_write_archive) as archive:
+        images = [info for info in archive.infolist() if not info.is_dir() and info.filename.lower().endswith(".png")]
+        for index, info in enumerate(images, 1):
+            parts = PurePosixPath(info.filename).parts
+            writer_part = next((part for part in parts if writer_pattern.match(part)), None)
+            if writer_part is None:
+                continue
+            match = writer_pattern.match(writer_part)
+            partition = next((part for part in parts if partition_pattern.match(part)), "unknown")
+            origins[_zip_digest(archive, info)].append((match.group(1), match.group(2), partition))
+            if index % 100_000 == 0:
+                print(f"indexed by_write archive: {index}/{len(images)}", flush=True)
+
+    class_root = Path(extracted_by_class).resolve()
+    records = []
+    ambiguous = missing = 0
+    with zipfile.ZipFile(by_class_archive) as archive:
+        images = [info for info in archive.infolist() if not info.is_dir() and info.filename.lower().endswith(".png")]
+        for index, info in enumerate(images, 1):
+            parts = PurePosixPath(info.filename).parts
+            class_part = next((part for part in parts if len(part) == 2 and all(c in "0123456789abcdefABCDEF" for c in part)), None)
+            if class_part is None:
+                continue
+            character = chr(int(class_part, 16))
+            if character not in NIST19_ALPHABET:
+                continue
+            matches = origins.get(_zip_digest(archive, info), [])
+            unique = {(writer, form, partition) for writer, form, partition in matches}
+            if not unique:
+                missing += 1
+                continue
+            if len(unique) != 1:
+                ambiguous += 1
+                continue
+            writer, form, partition = next(iter(unique))
+            relative_parts = parts[parts.index("by_class") + 1:] if "by_class" in parts else parts
+            image = class_root.joinpath(*relative_parts)
+            records.append({"path": str(image), "character": character, "writer_id": writer,
+                            "form_id": form, "partition": partition, "sample_id": image.stem})
+            if index % 100_000 == 0:
+                print(f"indexed by_class archive: {index}/{len(images)}", flush=True)
+    return records, {"indexed": len(records), "missing_hash": missing, "ambiguous_hash": ambiguous}
 
 
 def build_manifest_from_sd19_trees(by_write: str | Path, by_class: str | Path) -> tuple[list[dict], dict[str, int]]:
@@ -76,6 +137,20 @@ def save_glyph_manifest(records: list[dict], path: str | Path) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(records, indent=2), encoding="utf-8")
+
+
+def make_manifest_portable(records: list[dict], root: str | Path) -> list[dict]:
+    """Return rows with image paths relative to a portable dataset root."""
+    base = Path(root).resolve()
+    portable = []
+    for row in records:
+        image = Path(os.path.abspath(row["path"]))
+        try:
+            relative = image.relative_to(base)
+        except ValueError as error:
+            raise ValueError(f"Image is outside portable root {base}: {image}") from error
+        portable.append({**row, "path": relative.as_posix()})
+    return portable
 
 
 def writer_disjoint_splits(records: list[dict], ratios=(0.8, 0.1, 0.1), seed: int = 42) -> dict[str, list[dict]]:

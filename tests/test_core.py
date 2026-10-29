@@ -1,9 +1,16 @@
 import json
+from pathlib import Path
+import zipfile
 
 import torch
 from PIL import Image, ImageDraw
 
-from glyph_codebook.data import NIST19EpisodeDataset, build_manifest_from_sd19_trees
+from glyph_codebook.data import (
+    NIST19EpisodeDataset,
+    build_manifest_from_sd19_archives,
+    build_manifest_from_sd19_trees,
+    make_manifest_portable,
+)
 from glyph_codebook.models import AttentionGlyphGenerator, GlyphCodebook
 from glyph_codebook.cli.train_encoder import supervised_contrastive
 from glyph_codebook.clustering import spherical_kmeans
@@ -71,3 +78,33 @@ def test_official_tree_cross_index_recovers_writer_and_class(tmp_path):
     assert summary["indexed"] == 1
     assert records[0]["writer_id"] == "0001"
     assert records[0]["character"] == "A"
+
+
+def test_make_manifest_portable(tmp_path):
+    image = tmp_path / "by_class" / "61" / "sample.png"
+    image.parent.mkdir(parents=True)
+    image.touch()
+    rows = [{"path": str(image), "character": "a", "writer_id": "0001"}]
+    portable = make_manifest_portable(rows, tmp_path)
+    assert portable[0]["path"] == "by_class/61/sample.png"
+    assert Path(rows[0]["path"]).is_absolute()
+
+
+def test_official_archives_cross_index_to_extracted_class_tree(tmp_path):
+    image = Image.new("L", (8, 8), 255)
+    ImageDraw.Draw(image).line((1, 7, 4, 1, 7, 7), fill=0, width=1)
+    source = tmp_path / "sample.png"
+    image.save(source)
+    class_image = tmp_path / "extracted" / "41" / "hsf_0" / "hsf_0_00000.png"
+    class_image.parent.mkdir(parents=True)
+    image.save(class_image)
+    write_zip = tmp_path / "by_write.zip"
+    class_zip = tmp_path / "by_class.zip"
+    with zipfile.ZipFile(write_zip, "w") as archive:
+        archive.write(source, "by_write/hsf_0/f0001_02/u0001_02/u0001_02_00000.png")
+    with zipfile.ZipFile(class_zip, "w") as archive:
+        archive.write(source, "by_class/41/hsf_0/hsf_0_00000.png")
+    records, summary = build_manifest_from_sd19_archives(write_zip, class_zip, tmp_path / "extracted")
+    assert summary["indexed"] == 1
+    assert records[0]["writer_id"] == "0001"
+    assert Path(records[0]["path"]) == class_image
