@@ -22,6 +22,8 @@ def main() -> None:
     parser.add_argument("--by-write-archive"); parser.add_argument("--by-class-archive")
     parser.add_argument("--portable", action="store_true",
                         help="Store image paths relative to the output directory for Kaggle upload")
+    parser.add_argument("--skip-image-validation", action="store_true",
+                        help="Skip exhaustive is_file checks when the extracted tree was already verified")
     args = parser.parse_args(); cfg = load_config(args.config); data = cfg["data"]
     output = Path(args.output or data["nist19_prepared_dir"])
     if args.by_write_archive or args.by_class_archive:
@@ -37,8 +39,9 @@ def main() -> None:
         print(json.dumps(index_summary, indent=2))
     else:
         source = Path(args.manifest or data["nist19_manifest"]); records = load_glyph_manifest(source)
-    missing = [row["path"] for row in records if not Path(row["path"]).is_file()]
-    if missing: raise FileNotFoundError(f"{len(missing)} manifest images do not exist; first missing path: {missing[0]}")
+    if not args.skip_image_validation:
+        missing = [row["path"] for row in records if not Path(row["path"]).is_file()]
+        if missing: raise FileNotFoundError(f"{len(missing)} manifest images do not exist; first missing path: {missing[0]}")
     if args.portable:
         records = make_manifest_portable(records, output)
     output.mkdir(parents=True, exist_ok=True)

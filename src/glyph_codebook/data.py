@@ -42,7 +42,8 @@ def build_manifest_from_sd19_archives(
     writer_pattern = re.compile(r"^f(\d{4})_(\d{2})$")
     partition_pattern = re.compile(r"^hsf_\d+$")
     with zipfile.ZipFile(by_write_archive) as archive:
-        images = [info for info in archive.infolist() if not info.is_dir() and info.filename.lower().endswith(".png")]
+        images = [info for info in archive.infolist()
+                  if not info.is_dir() and info.filename.lower().endswith(".png")]
         for index, info in enumerate(images, 1):
             parts = PurePosixPath(info.filename).parts
             writer_part = next((part for part in parts if writer_pattern.match(part)), None)
@@ -58,7 +59,9 @@ def build_manifest_from_sd19_archives(
     records = []
     ambiguous = missing = 0
     with zipfile.ZipFile(by_class_archive) as archive:
-        images = [info for info in archive.infolist() if not info.is_dir() and info.filename.lower().endswith(".png")]
+        images = [info for info in archive.infolist()
+                  if not info.is_dir() and info.filename.lower().endswith(".png")
+                  and any(partition_pattern.match(part) for part in PurePosixPath(info.filename).parts)]
         for index, info in enumerate(images, 1):
             parts = PurePosixPath(info.filename).parts
             class_part = next((part for part in parts if len(part) == 2 and all(c in "0123456789abcdefABCDEF" for c in part)), None)
@@ -100,6 +103,8 @@ def build_manifest_from_sd19_trees(by_write: str | Path, by_class: str | Path) -
         origins[_digest(image)].append((match.group(1), match.group(2), partition))
     records = []; ambiguous = missing = 0
     for image in class_root.rglob("*.png"):
+        if not any(partition_pattern.match(part.name) for part in image.parents):
+            continue
         class_dir = next((part for part in image.parents if len(part.name) == 2 and all(c in "0123456789abcdefABCDEF" for c in part.name)), None)
         if class_dir is None: continue
         character = chr(int(class_dir.name, 16))
