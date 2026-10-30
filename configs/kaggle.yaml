@@ -6,7 +6,7 @@ data:
   # Alternative official second-edition trees; used when the manifest is absent.
   nist19_by_write: /kaggle/input/nist-sd19/by_write
   nist19_by_class: /kaggle/input/nist-sd19/by_class
-  nist19_prepared_dir: /kaggle/working/glyph-codebook-data/nist19
+  nist19_prepared_dir: /kaggle/input/datasets/lphmthnhnhn/nist19-prepared
   nist19_split: [0.8, 0.1, 0.1]
   classifier_checkpoint: /kaggle/input/charwritevit-classifier/best.pt
 
