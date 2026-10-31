@@ -81,6 +81,16 @@ python -m glyph_codebook.cli.train_encoder \
   --config configs/kaggle.yaml --output /kaggle/working/outputs/nist-encoder
 ```
 
+Encoder logs include dataset loading time, running batch losses, GPU memory,
+validation retrieval, checkpoint updates and epoch duration. Machine-readable
+metrics remain in `metrics.jsonl`; TensorBoard events are written under
+`nist-encoder/tensorboard`. In a Kaggle notebook, display them with:
+
+```python
+%load_ext tensorboard
+%tensorboard --logdir /kaggle/working/outputs/nist-encoder/tensorboard
+```
+
 Build the immutable `k=4` codebook and fixed manifests:
 
 ```bash

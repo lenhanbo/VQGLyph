@@ -35,6 +35,8 @@ glyph_codebook:
     style_weight: 1.0
     decorrelation_weight: 0.1
     validation_batches: 50
+    log_every_steps: 50
+    tensorboard: true
     amp: true
   selector_train:
     epochs: 30
